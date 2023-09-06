@@ -33,7 +33,7 @@ books_by_library = {}
 i = 0
 for book in books:
     i += 1
-    if i > 100000:
+    if i > 10000:
         break
     print(f'Scraping Title: {book.title}, Link: {book.link}')
 
@@ -58,22 +58,38 @@ for book in books:
         
         for row in rows:
             # Find the 'td' within the 'tr'
-            td = row.find('td')
+            tds = row.find_all('td')
+            
             
             # Find the 'a' (link) within the 'td', if it exists
-            if td:
-                link = td.find('a')
+            if tds[0]:
+                library_td = tds[0]
+                link = library_td.find('a')
                 
                 # Extract the link text if the link exists and is in Barcelona
                 if link and link.text.startswith('BCN'):
                     if link.text not in books_by_library:
                         books_by_library[link.text] = []
-                    entry = asdict(book)
-                    entry['num_copies_global'] = len(rows)
 
-                    books_by_library[link.text].append(entry)
+                    # TODO: extract link and save in a list of libraries
 
-sorted_books_by_library = {k: v for k, v in sorted(books_by_library.items(), key=lambda item: len(item[1]), reverse=True)}
+                    # Need to convert dataclass to dict for json serialization
+                    # We also take this as a chance to enrich the data
+                    book_copy = asdict(book)
+                    book_copy['num_copies_global'] = len(rows)
+                    
+                    # If library is found, we can also look for the state of the copy
+                    if tds[2]:
+                        state_td = tds[2]
+                        state = state_td.text.strip()
+                        book_copy['state'] = state
+                    
+                    books_by_library[link.text].append(book_copy)
+                    
+                    
+
+count_num_avaialble_copies = lambda item: len([book_copy for book_copy in item[1] if book_copy['state'] == "Disponible"])
+sorted_books_by_library = {k: v for k, v in sorted(books_by_library.items(), key=count_num_avaialble_copies, reverse=True)}
 
 # Pretty print the results and write to JSON file
 print(json.dumps(sorted_books_by_library, indent=4))
