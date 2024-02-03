@@ -1,28 +1,25 @@
 import csv
 import requests
 import json
+import re
 from bs4 import BeautifulSoup
 from dataclasses import dataclass,asdict
-import re
+from bcnlibrarylookup.http import rate_limited_request
+from bcnlibrarylookup.model import BookEdition
+from bcnlibrarylookup.parse import get_canonical_link
 
-SNAPSHOT_DIR="snapshot-2023-09-05"
+SNAPSHOT_DIR="snapshot-2024-02-03"
 
-@dataclass
-class BookEdition:
-    title: str
-    link: str
+
 
 books = []
-with open(f'{SNAPSHOT_DIR}/single-edition-books-found.csv', 'r') as csvfile:
+with open(f'{SNAPSHOT_DIR}/author-search-books.csv', 'r') as csvfile:
     csvreader = csv.reader(csvfile, quotechar='"')
     header = next(csvreader)  # Skip the header row
-
 
     # Find the indexes of the csv fields we want, based on header values
     title_index = header.index("Title") 
     link_index = header.index("Link")
-
-
 
     for row in csvreader:
         print(row)
@@ -33,7 +30,7 @@ books_by_library = {}
 i = 0
 for book in books:
     i += 1
-    if i > 10000:
+    if i > 1000:
         break
     print(f'Scraping Title: {book.title}, Link: {book.link}')
 
@@ -41,12 +38,24 @@ for book in books:
     # The format of that URL is different biut we can build it from the canonical URL by extracting the book ID
     # The canonical URL is in the form: https://aladi.diba.cat/record=b1234567~S10*spi
     # The book copies listing URL is in the form: https://aladi.diba.cat/search~S10*spi?/.b1234567/.b1234567/1,1,1,B/holdings~1234567&FF=&1,0,
-    book_id = re.search(r'record=b(\d+)~', book.link).group(1)
+    book_id_result = re.search(r'record=b(\d+)~', book.link)
+    if not book_id_result:
+        print(f"Found non-canonical link for book {book.title}, will lookup canonical url for link: \"{book.link}\"")
+        response = rate_limited_request(book.link.strip())
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            book_result = get_canonical_link(soup)
+            book_id_result = re.search(r'record=b(\d+)~', book_result.link.strip())
+
+        else:
+            print(f"ERROR: couldn't get canonical link for book {book.title}")
+            continue
+    book_id = book_id_result.group(1)
+    print(f"Found book_id {book_id}, proceeding to lookup copies available")
     all_holdings_page = f'https://aladi.diba.cat/search~S10*spi?/.b{book_id}/.b{book_id}/1,1,1,B/holdings~{book_id}&FF=&1,0'
 
     # Get the book copies listing page
-    response = requests.get(all_holdings_page)
-
+    response = rate_limited_request(all_holdings_page)
 
     # Check for a successful response
     if response.status_code == 200:

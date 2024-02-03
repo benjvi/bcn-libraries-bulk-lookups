@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "bcn-libaries-bulk-lookups"
+version = "0.1.0"
+description = ""
+authors = ["Benjamin Vickers <ben881@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "*"
+beautifulsoup4 = "*"
+googletrans = "^4.0.0rc1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+

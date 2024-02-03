@@ -1,8 +1,11 @@
+import csv
 import json
 import html
 import os
 
-EXTRACT_DATE="2023-09-05"
+from bcnlibrarylookup.model import BookEdition
+
+EXTRACT_DATE="2024-02-03"
 SNAPSHOT_DIR=f'snapshot-{EXTRACT_DATE}'
 NOTES_DIR="notes"
 
@@ -13,6 +16,23 @@ books_by_library = {}
 with open(f'{SNAPSHOT_DIR}/books_by_library.json') as json_file:
     books_by_library = json.load(json_file)
 
+author_from_title = {}
+with open(f'{SNAPSHOT_DIR}/author-search-books.csv', 'r') as csvfile:
+    csvreader = csv.reader(csvfile, quotechar='"')
+    header = next(csvreader)  # Skip the header row
+
+    # Find the indexes of the csv fields we want, based on header values
+    title_index = header.index("Title")
+    link_index = header.index("Link")
+    author_index = header.index("Author")
+
+    for row in csvreader:
+        print(row)
+        author_from_title[row[title_index]] = row[author_index]
+
+# make sure notes directory exists, and if not create it (NB snapshot dir has to exist)
+if not os.path.exists(f'{SNAPSHOT_DIR}/{NOTES_DIR}'):
+    os.makedirs(f'{SNAPSHOT_DIR}/{NOTES_DIR}')
 
 libraries_note = """---
 tags:
@@ -36,7 +56,8 @@ for library_name, books in books_by_library.items():
     # create library-specific notes with links to books
     # only include libraries with many available books or in whitelist
     whitelist = ["Poblenou", "Gabriel García Márquez", "El Clot", "Francesca Bonnemaison", "Barceloneta La Fraternitat"]
-    if num_available_book_copies > 6 or any(item in unicode_library_name for item in whitelist):
+    #if num_available_book_copies > 6 or any(item in unicode_library_name for item in whitelist):
+    if any(item in unicode_library_name for item in whitelist):
         print("Creating note for library: " + unicode_library_name)
         library_note_title = f'Book Availability In {unicode_library_name} {EXTRACT_DATE}'
 
@@ -51,6 +72,11 @@ tags:
             # convert escaped unicode codes to characters
             unicode_book_title = html.unescape(book['title'])
 
+            if book['title'] in author_from_title:
+                author = author_from_title[book['title']]
+                unicode_author = html.unescape(author)
+                library_note += f'{unicode_author} - '
+
             library_note += f'[**{unicode_book_title}**]({book["link"]}) {book["state"]} ({book["num_copies_global"]} global copies)\n\n'
 
             with open(f'{SNAPSHOT_DIR}/{NOTES_DIR}/{library_note_title}.md', 'w') as outfile:
@@ -63,9 +89,6 @@ tags:
 
 
 
-# make sure notes directory exists, and if not create it (NB snapshot dir has to exist)
-if not os.path.exists(f'{SNAPSHOT_DIR}/{NOTES_DIR}'):
-    os.makedirs(f'{SNAPSHOT_DIR}/{NOTES_DIR}')
 
 with open(f'{SNAPSHOT_DIR}/{NOTES_DIR}/BCN Libraries Book Availability {EXTRACT_DATE}.md', 'w') as outfile:
     outfile.write(libraries_note)
